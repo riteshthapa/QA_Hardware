@@ -1,0 +1,1324 @@
+﻿$Version = "WSU QA Version 1.0"
+
+# variables
+$Global:didPass1 = $Global:didPass2 = $Global:didPass3 = $Global:didPass4 = $Global:didPass5 = $Global:didPass6 = $Global:didPass7 = $Global:didPass8 = $Global:didPass9 = $Global:didPass10 = $Global:didPass11 = $Global:didPass12 = $Global:didPass13 = $Global:didPass14 = $Global:didPass15 = $false
+$date = Get-Date
+
+# system information 
+$Manufacturer = (Get-WmiObject win32_bios).manufacturer
+$Model = (gwmi Win32_ComputerSystem).model
+$processor = (gwmi -Class Win32_processor).Name
+$RAM = (gwmi Win32_PhysicalMemory | Measure-Object -Property capacity -Sum | % { [Math]::Round(($_.sum / 1GB), 2) })
+$Serial = (gwmi win32_bios).SerialNumber
+$disksize = (gwmi -Class Win32_Diskdrive -Filter { DeviceId = '\\\\.\\PHYSICALDRIVE0' } | Measure-Object -Property size -Sum | % { [Math]::Round(($_.sum / 1GB), 2) })
+
+# bios info
+$BIOSVersion = (get-wmiObject -class win32_bios).SMBIOSBIOSVersion
+$BIOSManu = (get-wmiObject -class win32_bios).Manufacturer
+$BIOSSerialNumber = (get-wmiObject -class win32_bios).SerialNumber
+
+# keyboard info
+$keyboardDescription = (Get-PnpDevice -Class 'Keyboard').FriendlyName
+$keyboardStatus = (Get-PnpDevice -Class 'Keyboard').status
+
+# touchpad info
+$tpName = (Get-PnpDevice -Class 'mouse').FriendlyName
+$g3tpStatus = (Get-PnpDevice -FriendlyName 'Alps PTP Filter').status
+$g2tpStatus = (Get-PnpDevice -FriendlyName 'AlpsAlpine GlidePoint HID Filter').status
+
+# x360g3 fingerPrint Reader info
+$g3fpName = (Get-PnpDevice -friendlyName 'Synaptics VFS7552 Touch Fingerprint Sensor with PurePrint(TM)').Name
+$g3fpStatus = (Get-PnpDevice -friendlyName 'Synaptics VFS7552 Touch Fingerprint Sensor with PurePrint(TM)').Status
+# x360g2 fingerPrint Reader info
+$g2fpName = (Get-PnpDevice -friendlyName 'Synaptics VFS7552 Touch Fingerprint Sensor').Name
+$g2fpStatus = (Get-PnpDevice -friendlyName 'Synaptics VFS7552 Touch Fingerprint Sensor').Status
+
+# x360g3 regular camera
+$g3cameraName = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP Full-HD Camera' }).Name
+$g3cameraPresent = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP Full-HD Camera' }).Present
+$g3cameraStatus = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP Full-HD Camera' }).Status
+
+# x360g2 regular camera
+$g2cameraName = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP HD Camera' }).Name
+$g2cameraPresent = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP HD Camera' }).Present
+$g2cameraStatus = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP HD Camera' }).Status
+
+# infrared(IR) camera 
+$IRcameraName = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP IR Camera' }).Name
+$IRcameraPresent = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP IR Camera' }).Present
+$IRcameraStatus = (Get-WmiObject Win32_PnPEntity | where { $_.caption -match 'HP IR Camera' }).Status
+
+# bluetooth info
+$bluetoothDescription = (Get-PnpDevice -Class 'Bluetooth').FriendlyName
+$bluetoothStatus = (Get-PnpDevice -Class 'Bluetooth').status
+
+# wifi info
+$wifiName = (Get-Pnpdevice -FriendlyName 'Intel(R) Dual Band Wireless-AC 8265').Name
+$wifiStatus = (Get-Pnpdevice -FriendlyName 'Intel(R) Dual Band Wireless-AC 8265').status
+
+# battery info
+$batteryDescription = (gwmi -Class Win32_Battery).description
+$batteryStatus = (gwmi -class Win32_Battery).Status
+$Global:ACPowerStatus = (Get-WmiObject -Class BatteryStatus -Namespace root\wmi -ErrorAction SilentlyContinue).PowerOnLine
+
+# touchScreen 
+$touchScreeenName = (Get-PnpDevice -friendlyName 'HID-compliant touch screen').Name
+$touchScreenStatus = (Get-PnpDevice -friendlyName 'HID-compliant touch screen').status
+
+# Trusted Platform Module(TPM) info
+$tpmLabel = Get-WmiObject -Class Win32_Tpm -Namespace "root\CIMV2\Security\MicrosoftTpm"
+$tpmEnabled = $tpmLabel.IsEnabled_InitialValue
+$tpmActivated = $tpmLabel.IsActivated_InitialValue
+$tpmPresent = (Get-Tpm).tpmPresent
+
+# micro sd card reader info
+$sdCardName = (Get-PnpDevice -Class 'MTD').Name
+$Global:sdCardStatus = (Get-PnpDevice -Class 'MTD').Status
+
+# microphone x360g3 info
+$g3microPhoneName = (get-pnpdevice -FriendlyName 'Microphone (Conexant ISST Audio)').Name
+$g3microPhoneStatus = (Get-CimInstance win32_sounddevice).Status
+# microphone x360g2 info
+$g2microPhoneName = (get-pnpdevice -FriendlyName 'Internal Microphone (Conexant ISST Audio)').Name
+$g2microPhoneStatus = (Get-CimInstance win32_sounddevice).Status
+
+# speakers info
+$speakerName = (get-pnpdevice -FriendlyName 'Speakers (Conexant ISST Audio)').Name
+$speakerStatus = (Get-CimInstance win32_sounddevice).Status
+
+# STEP:1 => Gathering HP system information
+function systemInfo
+{
+	# verifying the model of laptop
+	if ($Model -eq "HP Elitebook x360 1030 G3")
+	{
+		# displaying text information 
+		$information.Show()
+		$information.Text =
+		"SYSTEM INFORMATION" + "`n" + "`n" +
+		"Manufacturer: " + $Manufacturer + "`n" +
+		"Model: " + $Model + "`n" +
+		"Processor: " + $processor + "`n" +
+		"Storage Media Size: " + $disksize + "GB" + "`n" +
+		"Installed RAM Amount: " + $RAM + "GB" + "`n" +
+		"Serial Version: " + $Serial
+		$system.ForeColor = 'Lime'
+		$greenCheckmark1.Show()
+		$checkmark1.Hide()
+		Start-Sleep -Seconds 3
+		$Global:didPass1 = $true
+		log "*********************************************************************"
+		log "Started Hardware Verification process at [$date]"
+		log "Running Script Version [$Version]."
+		log "*********************************************************************"
+		log "Correct system detected: $Model"
+		log "QA Status: $didPass1"
+	}
+	elseif ($Model -eq "HP Elitebook x360 1030 G2")
+	{
+		$information.Show()
+		$information.Text =
+		"SYSTEM INFORMATION" + "`n" + "`n" +
+		"Manufacturer: " + $Manufacturer + "`n" +
+		"Model: " + $Model + "`n" +
+		"Processor: " + $processor + "`n" +
+		"Storage Media Size: " + $disksize + "GB" + "`n" +
+		"Installed RAM Amount: " + $RAM + "GB" + "`n" +
+		"Serial Version: " + $Serial
+		$system.ForeColor = 'Lime'
+		$greenCheckmark1.Show()
+		$checkmark1.Hide()
+		Start-Sleep -Seconds 3
+		$Global:didPass1 = $true
+		log "*********************************************************************"
+		log "Started Hardware Verification process at [$date]"
+		log "Running Script Version [$Version]."
+		log "*********************************************************************"
+		log "Correct system detected: $Model"
+		log "QA Status: $didPass1"
+	}
+}
+# STEP:2 => keyboard check
+function keyboardStatus
+{
+	$information.Show()
+	$information.Text =
+	"KEYBOARD INFORMATION" + "`n" + "`n" +
+	$keyboardDescription
+	
+	if ($keyboardStatus -eq 'OK')
+	{
+		$keyboard.ForeColor = 'Lime'
+		$greenCheckmark2.Show()
+		$checkmark2.Hide()
+		$Global:didPass2 = $true
+		log "Keyboard detected sucessfully. Keyboard Status: $keyboardStatus"
+		log "QA Status: $didPass2"
+	}
+	else
+	{
+		$keyboard.ForeColor = 'Red'
+		$keyboard.Text = 'Keyboard not detected!'
+		$cross2.Show()
+		$checkmark2.Hide()
+		$Global:didPass2 = $false
+		log "====Keyboard not detected: $keyboardStatus===="
+		log "====QA Status: $didPass2===="
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:3 => touchpad check
+function touchpad
+{
+	$information.Show()
+	$information.Text =
+	"TOUCHPAD INFORMATION" + "`n" + "`n" +
+	$tpName
+	
+	if ($Model -eq "HP Elitebook x360 1030 G3")
+	{
+		if ($g3tpStatus -eq 'OK')
+		{
+			$touchpad.ForeColor = 'Lime'
+			$greenCheckmark3.Show()
+			$checkmark3.Hide()
+			$Global:didPass3 = $true
+			log "TouchPad detected sucessfully. TouchPad Status: $g3tpStatus"
+			log "QA Status: $didPass3"
+		}
+		else
+		{
+			$touchpad.ForeColor = 'Red'
+			$touchpad.Text = 'Touchpad not detected!'
+			$cross3.Show()
+			$checkmark3.Hide()
+			$Global:didPass3 = $false
+			log "====TouchPad not detected: $g3tpStatus===="
+			log "====QA Status: $didPass3===="
+		}
+	}
+	elseif ($Model -eq "HP Elitebook x360 1030 G2")
+	{
+		if ($g2tpStatus -eq 'OK')
+		{
+			$touchpad.ForeColor = 'Lime'
+			$greenCheckmark3.Show()
+			$checkmark3.Hide()
+			$Global:didPass3 = $true
+			log "TouchPad detected sucessfully. TouchPad Status: $g2tpStatus"
+			log "QA Status: $didPass3"
+		}
+		else
+		{
+			$touchpad.ForeColor = 'Red'
+			$touchpad.Text = 'Touchpad not detected!'
+			$cross3.Show()
+			$checkmark3.Hide()
+			$Global:didPass3 = $false
+			log "====TouchPad not detected: $g2tpStatus===="
+			log "====QA Status: $didPass3===="
+		}
+	}
+	
+	Start-Sleep -Seconds 3
+}
+# STEP:4 => (a) onboard camera check for x360g3
+function g3camera
+{
+	$information.Show()
+	$information.Text =
+	"ONBOARD CAMERA INFORMATION" + "`n" + "`n" +
+	"Name: " + $g3cameraName + "`n" +
+	"Present: " + $g3cameraPresent + "`n" +
+	"Status: " + $g3cameraStatus + "`n" + "`n" +
+	
+	"ONBOARD INFRARED CAMERA INFORMATION" + "`n" + "`n" +
+	"Name: " + $IRcameraName + "`n" +
+	"Present: " + $IRcameraPresent + "`n" +
+	"Status: " + $IRcameraStatus
+	
+	if (($IRcameraStatus -eq 'OK') -and ($g3cameraStatus -eq 'OK'))
+	{
+		$camera.ForeColor = 'Lime'
+		$greenCheckmark4.Show()
+		$checkmark4.Hide()
+		$Global:didPass4 = $true
+		log "Both IR camera and G3 camera detected sucessfully. IR Status: $IRcameraStatus  Regular Camera Status: $g3cameraStatus"
+		log "QA Status: $didPass4"
+	}
+	elseif (($IRcameraStatus -ne 'OK') -and ($g3cameraStatus -ne 'OK'))
+	{
+		$camera.ForeColor = 'Red'
+		$camera.Text = 'Camera not detected!'
+		$cross4.Show()
+		$checkmark4.Hide()
+		$Global:didPass4 = $false
+		log "====Both IR and regular G3 camera not detected. IR Status: $IRcameraStatus  Regular Camera Status: $g3cameraStatus===="
+		log "====QA Status: $didPass4===="
+	}
+	else
+	{
+		if ($IRcameraStatus -ne 'OK')
+		{
+			$camera.ForeColor = 'Red'
+			$camera.Text = "IR camera not detected!"
+			$cross4.Show()
+			$checkmark4.Hide()
+			$Global:didPass4 = $false
+			log "====IR camera not detected. IR Status: $IRcameraStatus===="
+			log "====QA Status: $didPass4===="
+		}
+		elseif ($g3cameraStatus -ne 'OK')
+		{
+			$camera.ForeColor = 'Red'
+			$camera.Text = "HP camera not detected!"
+			$cross4.Show()
+			$checkmark4.Hide()
+			$Global:didPass4 = $false
+			log "====Regular G3 camera not detected. Regular Camera Status: $g3cameraStatus===="
+			log "====QA Status: $didPass4===="
+		}
+	}
+Start-Sleep -Seconds 3
+}
+# STEP:4 => (b) onboard camera check for x360g2
+function g2camera
+{
+	$information.Show()
+	$information.Text =
+	"ONBOARD CAMERA INFORMATION" + "`n" + "`n" +
+	"Name: " + $g2cameraName + "`n" +
+	"Present: " + $g2cameraPresent + "`n" +
+	"Status: " + $g2cameraStatus + "`n" + "`n" +
+	
+	"ONBOARD INFRARED CAMERA INFORMATION" + "`n" + "`n" +
+	"Name: " + $IRcameraName + "`n" +
+	"Present: " + $IRcameraPresent + "`n" +
+	"Status: " + $IRcameraStatus
+	
+	if (($IRcameraStatus -eq 'OK') -and ($g2cameraStatus -eq 'OK'))
+	{
+		$camera.ForeColor = 'Lime'
+		$greenCheckmark4.Show()
+		$checkmark4.Hide()
+		$Global:didPass4 = $true
+		log "Both IR camera and G2 camera detected sucessfully. IR Status: $IRcameraStatus  Regular Camera Status: $g2cameraStatus"
+		log "QA Status: $didPass4"
+	}
+	elseif (($IRcameraStatus -ne 'OK') -and ($g2cameraStatus -ne 'OK'))
+	{
+		$camera.ForeColor = 'Red'
+		$camera.Text = 'Camera not detected!'
+		$cross4.Show()
+		$checkmark4.Hide()
+		$Global:didPass4 = $false
+		log "====Both IR and regular G2 camera not detected. IR Status: $IRcameraStatus  Regular Camera Status: $g2cameraStatus===="
+		log "====QA Status: $didPass4===="
+	}
+	else
+	{
+		if ($IRcameraStatus -ne 'OK')
+		{
+			$camera.ForeColor = 'Red'
+			$camera.Text = "IR camera not detected!"
+			$cross4.Show()
+			$checkmark4.Hide()
+			$Global:didPass4 = $false
+			log "====IR camera not detected. IR Status: $IRcameraStatus===="
+			log "====QA Status: $didPass4===="
+		}
+		elseif ($g2cameraStatus -ne 'OK')
+		{
+			$camera.ForeColor = 'Red'
+			$camera.Text = "HP camera not detected!"
+			$cross4.Show()
+			$checkmark4.Hide()
+			$Global:didPass4 = $false
+			log "====Regular G2 camera not detected. Regular Camera Status: $g2cameraStatus===="
+			log "====QA Status: $didPass4===="
+		}
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:5 => bluetooth check
+function bluetooth
+{
+	$information.Show()
+	$information.Text =
+	"BLUETOOTH INFORMATION" + "`n" + "`n" +
+	$bluetoothDescription + "`n"
+	if ($bluetoothStatus -eq 'OK')
+	{
+		$bluetooth.ForeColor = 'Lime'
+		$greenCheckmark5.Show()
+		$checkmark5.Hide()
+		$Global:didPass5 = $true
+		log "Bluetooth detected sucesfully. Bluetooth Status: $bluetoothStatus"
+		log "QA Status: $didPass5"
+	}
+	else
+	{
+		$bluetooth.ForeColor = 'Red'
+		$bluetooth.Text = 'Bluetooth not detected!'
+		$cross5.Show()
+		$checkmark5.Hide()
+		$Global:didPass5 = $false
+		log "====Bluetooth not detected. Bluetooth Status: $bluetoothStatus===="
+		log "====QA Status: $didPass5===="
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:6 => wifi check
+function wifi
+{
+	$information.Text =
+	"WIFI INFORMATION" + "`n" + "`n" +
+	"Name: " + $wifiName + "`n" +
+	"Status: " + $wifiStatus
+	
+	if ($wifiStatus -eq 'OK')
+	{
+		$wifi.ForeColor = 'Lime'
+		$greenCheckmark6.Show()
+		$checkmark6.Hide()
+		$Global:didPass6 = $true
+		log "wifi detected sucesfully. wifi Status: $wifiStatus"
+		log "QA Status: $didPass6"
+	}
+	else
+	{
+		$wifi.ForeColor = 'Red'
+		$wifi.Text = 'Wifi adapter not detected!'
+		$cross6.Show()
+		$checkmark6.Hide()
+		$Global:didPass6 = $false
+		log "====wifi not detected. wifi Status: $wifiStatus===="
+		log "====QA Status: $didPass6===="
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:7 => battery check
+function battery
+{
+	$information.Text =
+	"BATTERY INFORMATION" + "`n" + "`n" +
+	"Type: " + $batteryDescription + "`n" +
+	"Status: " + $batteryStatus
+	
+	if ($BatteryStatus -eq 'OK')
+	{
+		$battery.ForeColor = 'Lime'
+		$greenCheckmark7.Show()
+		$checkmark7.Hide()
+		$Global:didPass7 = $true
+		log "battery detected sucessfully. Battery Status: $BatteryStatus"
+		log "QA Status: $didPass7"
+	}
+	else
+	{
+		$battery.ForeColor = 'Red'
+		$battery.Text = 'Battery not detected!'
+		$cross7.Show()
+		$checkmark7.Hide()
+		$Global:didPass7 = $false
+		log "====battery not detected. Battery Status: $BatteryStatus===="
+		log "====QA Status: $didPass7===="
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:8 => (a) fingerPrint reader check for x360g3
+function g3fingerPrintReader
+{
+	$information.Text =
+	"FINGERPRINT READER INFORMATION" + "`n" + "`n" +
+	"Name: "+ $g3fpName + "`n" +
+	"Status: "+ $g3fpStatus
+	
+	if ($g3fpStatus -ne 'OK')
+	{
+		$fingerprint.ForeColor = 'Red'
+		$fingerprint.Text = 'FingerPrint reader not detected!'
+		$cross8.Show()
+		$checkmark8.Hide()
+		$Global:didPass8 = $false
+		log "====G3 fingerPrint not detected. FingerPrint Status: $g3fpStatus===="
+		log "====QA Status: $didPass8===="
+	}
+	else
+	{
+		$fingerprint.ForeColor = 'Lime'
+		$greenCheckmark8.Show()
+		$checkmark8.Hide()
+		$Global:didPass8 = $true
+		log "G3 fingerPrint detected sucessfully. FingerPrint Status: $g3fpStatus"
+		log "QA Status: $didPass8"
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:8 => (b) fingerPrint reader check for x360g2
+function g2fingerPrintReader
+{
+	$information.Text =
+	"FINGERPRINT READER INFORMATION" + "`n" + "`n" +
+	"Name: " + $g2fpName + "`n" +
+	"Status: " + $g2fpStatus
+	
+	if ($g2fpStatus -ne 'OK')
+	{
+		$fingerprint.ForeColor = 'Red'
+		$fingerprint.Text = 'FingerPrint reader not detected!'
+		$cross8.Show()
+		$checkmark8.Hide()
+		$Global:didPass8 = $false
+		log "====G2 fingerPrint not detected. FingerPrint Status: $g2fpStatus===="
+		log "====QA Status: $didPass8===="
+	}
+	else
+	{
+		$fingerprint.ForeColor = 'Lime'
+		$greenCheckmark8.Show()
+		$checkmark8.Hide()
+		$Global:didPass8 = $true
+		log "G2 fingerPrint detected sucessfully. FingerPrint Status: $g2fpStatus"
+		log "QA Status: $didPass8"
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:9 => bios version check
+function biosCheck
+{
+	# displaying text information 
+	$information.Text =
+	"DISPLAYING BIOS INFORMATION" + "`n" + "`n" +
+	"BIOS Version: " + $BIOSVersion + "`n" +
+	"SerialNumber: " + $BIOSSerialNumber + "`n" +
+	"Manufacturer: " + $BIOSManu
+	
+	$version = (get-wmiObject -class win32_bios).SMBIOSBIOSVersion | Out-String
+	#Write-Host $version
+	$formatVer = $version.Replace(".", " ")
+	$formatVer = $formatVer -Replace '\s', ''
+	#Write-Host $formatVer
+	$finalVer = $formatVer.Remove(0, 6)
+	$BIOSVersion = [int]$finalVer
+	
+	# x360g3 BIOS version check
+	if ($Model -eq "HP Elitebook x360 1030 G3")
+	{
+		# find the lastest BIOS version for HP X360 1030 G3 => https://support.hp.com/us-en/drivers/selfservice/hp-elitebook-x360-1030-g3-notebook-pc/19753388
+		if ($BIOSVersion -lt 010801) #010801 => 01.08.01 Rev.A Release Date: Aug 21, 2019....Update the value with the new release of BIOS version
+		{
+			$bios.ForeColor = 'Red'
+			$bios.Text = "BIOS needs to be updated!"
+			$cross9.Show()
+			$checkmark9.Hide()
+			$Global:didPass9 = $false
+			log "====BIOS Needs to be updated. New version of BIOS available===="
+			log "====QA Status: $didPass9===="
+		}
+		else
+		{
+			$bios.ForeColor = 'Lime'
+			$bios.Text = "BIOS version lookup!"
+			$greenCheckmark9.Show()
+			$checkmark9.Hide()
+			$Global:didPass9 = $true
+			log "BIOS version lookup process completed."
+			log "QA Status: $didPass9"
+			
+		}
+	}
+	# x360g2 BIOS version check
+	elseif ($Model -eq "HP Elitebook x360 1030 G2")
+	{
+		# find the lastest BIOS version for HP X360 1030 G3 => https://support.hp.com/us-en/drivers/selfservice/hp-elitebook-x360-1030-g2/14169372
+		if ($BIOSVersion -lt 0129) #0129 =>  Version: 01.29 Rev.A Release Date: Aug 23, 2019
+		{
+			$bios.ForeColor = 'Red'
+			$bios.Text = "BIOS needs to be updated!"
+			$cross9.Show()
+			$checkmark9.Hide()
+			$Global:didPass9 = $false
+			log "====BIOS Needs to be updated. New version of BIOS available===="
+			log "====QA Status: $didPass9===="
+		}
+		else
+		{
+			$bios.ForeColor = 'Lime'
+			$bios.Text = "BIOS version lookup!"
+			$greenCheckmark9.Show()
+			$checkmark9.Hide()
+			$Global:didPass9 = $true
+			log "BIOS version lookup process completed."
+			log "QA Status: $didPass9"
+		}
+	}
+	Start-Sleep -Seconds 3
+}
+#STEP:10 touchScreen check
+function touchScreen 
+{
+	$information.Text =
+	"TOUCH SCREEN INFORMATION" + "`n" + "`n" +
+	"Name: " + $touchScreeenName + "`n" +
+	"Status: " + $touchScreenStatus
+	
+	if ($touchScreenStatus -eq 'OK')
+	{
+		$touchScreen.ForeColor = 'Lime'
+		$greenCheckmark10.Show()
+		$checkmark10.Hide()
+		$Global:didPass10 = $true
+		log "Touch Screen detected sucessfully. Touch Screen Status: $touchScreenStatus"
+		log "QA Status: $didPass10"
+	}
+	else
+	{
+		$touchScreen.ForeColor = 'Red'
+		$touchScreen.Text = 'Touch Screen not detected!'
+		$cross10.Show()
+		$checkmark10.Hide()
+		$Global:didPass10 = $false
+		log "====Touch Screen not detected. Touch Screen Status: $touchScreenStatus===="
+		log "====QA Status: $didPass10===="
+	}
+	Start-Sleep -Seconds 3
+}
+#STEP:11 trusted platform module(TPM) check
+function tpm
+{
+	$information.Text =
+	"TPM(TRUSTED PLATFORM MODULE) INFORMATION" + "`n" + "`n" +
+	"Activated: " + $tpmActivated + "`n" +
+	"Enabled: " + $tpmEnabled + "`n" +
+	"Present: " + $tpmPresent
+	
+	if (($tpmActivated -eq 'True') -and ($tpmEnabled -eq 'True'))
+	{
+		$TrustedPlatformModule.ForeColor = 'Lime'
+		$greenCheckmark11.Show()
+		$checkmark11.Hide()
+		$Global:didPass11 = $true
+		log "TPM is activated and enabled.TPM Activated : $tpmActivated  TPM Enabled: $tpmEnabled"
+		log "QA Status: $didPass11"
+	}
+	elseif (($tpmActivated -ne 'True') -and ($tpmEnabled -ne 'True'))
+	{
+		$TrustedPlatformModule.ForeColor = 'Red'
+		$TrustedPlatformModule.Text = 'Enable and activate TPM!'
+		$cross11.Show()
+		$checkmark11.Hide()
+		$Global:didPass11 = $false
+		log "====TPM is not activated. And TPM is also not enabled. TPM Activated : $tpmActivated  TPM Enabled: $tpmEnabled===="
+		log "====QA Status: $didPass11===="
+	}
+	else
+	{
+		if ($tpmEnabled -ne 'True')
+		{
+			$TrustedPlatformModule.ForeColor = 'Red'
+			$TrustedPlatformModule.Text = 'TPM needs to be enabled!'
+			$cross11.Show()
+			$checkmark11.Hide()
+			$Global:didPass11 = $true
+			log "====TPM is also not enabled. TPM Enabled: $tpmEnabled===="
+			log "====QA Status: $didPass11===="
+		}
+		elseif ($tpmActivated -ne 'True')
+		{
+			$TrustedPlatformModule.ForeColor = 'Red'
+			$TrustedPlatformModule.Text = 'TPM needs to be activated!'
+			$cross11.Show()
+			$checkmark11.Hide()
+			$Global:didPass11 = $false
+			log "====TPM is not activated. TPM Activated : $tpmActivated===="
+			log "====QA Status: $didPass11===="
+		}
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:12 => speaker check
+function speakers
+{
+	$information.Text =
+	"SPEAKER INFORMATION" + "`n" + "`n" +
+	"Name: " + $speakerName + "`n" +
+	"Status: " + $speakerStatus
+	
+	if ($speakerStatus -ne 'OK')
+	{
+		$speaker.ForeColor = 'Red'
+		$speaker.Text = 'Speakers not detected!'
+		$cross12.Show()
+		$checkmark12.Hide()
+		$Global:didPass12 = $false
+		log "====Speakers not detected. Speaker Status: $speakerStatus===="
+		log "====QA Status: $didPass12===="
+	}
+	elseif ($speakerStatus -eq 'OK')
+	{
+		$speaker.ForeColor = 'Lime'
+		$greenCheckmark12.Show()
+		$checkmark12.Hide()
+		$Global:didPass12 = $true
+		log "Spakers detected sucessfully. Speakers status: $speakerStatus"
+		log "QA Status: $didPass12"
+	}
+	Start-Sleep -Seconds 3
+}
+#STEP:13 => (a) microPhone check for x360g3
+function g3microPhone
+{
+	$information.Text =
+	"MICROPHONE INFORMATION" + "`n" + "`n" +
+	"Name: " + $g3microPhoneName + "`n" +
+	"Status: " + $g3microPhoneStatus
+	
+	if ($g3microPhoneStatus -ne 'OK')
+	{
+		$microphone.ForeColor = 'Red'
+		$microphone.Text = 'Microphone not detected!'
+		$cross13.Show()
+		$checkmark13.Hide()
+		$Global:didPass13 = $false
+		log "====G3 microphone not detected. MicroPhone Status: $g3microPhoneStatus===="
+		log "====QA Status: $didPass13===="
+	}
+	elseif ($g3microPhoneStatus -eq 'OK')
+	{
+		$microphone.ForeColor = 'Lime'
+		$greenCheckmark13.Show()
+		$checkmark13.Hide()
+		$Global:didPass13 = $true
+		log "G3 microphone detected sucessfully. MicroPhone Status: $g3microPhoneStatus"
+		log "QA Status: $didPass13"
+	}
+	Start-Sleep -Seconds 3
+}
+#STEP:13 => (b) microPhone check for x360g2
+function g2microPhone
+{
+	$information.Text =
+	"MICROPHONE INFORMATION" + "`n" + "`n" +
+	"Name: " + $g2microPhoneName + "`n" +
+	"Status: " + $g2microPhoneStatus
+	
+	if ($g2microPhoneStatus -ne 'OK')
+	{
+		$microphone.ForeColor = 'Red'
+		$microphone.Text = 'Microphone not detected!'
+		$cross13.Show()
+		$checkmark13.Hide()
+		$Global:didPass13 = $false
+		log "====G2 microphone not detected. MicroPhone Status: $g2microPhoneStatus===="
+		log "====QA Status: $didPass13===="
+	}
+	elseif ($g2microPhoneStatus -eq 'OK')
+	{
+		$microphone.ForeColor = 'Lime'
+		$greenCheckmark13.Show()
+		$checkmark13.Hide()
+		$Global:didPass13 = $true
+		log "G2 microphone detected sucessfully. MicroPhone Status: $g2microPhoneStatus"
+		log "QA Status: $didPass13"
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:14 sd card reader check
+function sdCard
+{
+	$information.Text =
+	"SD CARD INFORMATION" + "`n" + "`n" +
+	"Name: " + $sdCardName + "`n" +
+	"Status: " + $sdCardStatus
+	
+	# we will check sd card reader slot maximum 3 times.
+	$attemptNum -eq 1 
+	for ($i = 0; $i -lt 3; $i++)
+	{
+		if ($sdCardStatus -ne 'OK')
+		{
+			$newSdCardStatus = (Get-PnpDevice -Class 'MTD').status #get new status value for sd card reader
+			$Global:sdCardStatus = $newSdCardStatus #update the status value to the old sd card reader variable
+			
+			# displays a message box for the user interaction
+			[System.Windows.Forms.MessageBox]::Show("SD card reader check 
+Please insert a SD card and make sure its working. If nothing is inserted, it will fail the test. `nAttempt ($attemptNum / 3)", "$Version")
+			$attemptNum++
+			Start-Sleep -Seconds 3 #sleep for 3 seconds and if status -ne display msgBox once again.
+		}
+		else
+		{
+			break #if status -eq break out of the loop
+		}
+	}
+	
+	if ($sdCardStatus -eq 'OK')
+	{
+		$sdCard.ForeColor = 'Lime'
+		$greenCheckmark14.Show()
+		$checkmark14.Hide()
+		$Global:didPass14 = $true
+		log "SD card detected sucessfully. SDCardStatus: $sdCardStatus"
+		log "QA Status: $didPass14"
+	}
+	elseif ($sdCardStatus -ne 'OK')
+	{
+		$sdCard.ForeColor = 'Red'
+		$sdCard.Text = "SD card reader not detected!"
+		$cross14.Show()
+		$checkmark14.Hide()
+		$Global:didPass14 = $false
+		log "====SD card not detected. SDCardStatus: $sdCardStatus===="
+		log "====QA Status: $didPass14===="
+	}
+	Start-Sleep -Seconds 3
+}
+# STEP:15 AC power check
+function ACPower
+{
+	$information.Text =
+	"AC POWER INFORMATION" + "`n" + "`n" +
+	"Status: " + $ACPowerStatus
+	
+	# we will check sd card reader slot maximum 3 times.
+	$attemptNum -eq 1
+	for ($i = 0; $i -lt 3; $i++)
+	{
+		if ($ACPowerStatus -ne 'True')
+		{
+			$newACPowerStatus = (Get-WmiObject -Class BatteryStatus -Namespace root\wmi -ErrorAction SilentlyContinue).PowerOnLine #get new status value for AC power
+			$Global:ACPowerStatus = $newACPowerStatus #update the status value to the old AC power status variable
+			
+			# displays a message box for the user interaction
+			[System.Windows.Forms.MessageBox]::Show("AC Power Check 
+Please connect AC Power. If the AC power supply is not connected, it will fail the test. `nAttempt ($attemptNum / 3)", "$Version")
+			$attemptNum++
+			Start-Sleep -Seconds 3 #sleep for 3 seconds and if status -ne display msgBox once again.
+		}
+		else
+		{
+			break #if status -eq break out of the loop
+		}
+	}
+	if ($ACPowerStatus -eq 'True')
+	{
+		$ACPower.ForeColor = 'Lime'
+		$greenCheckmark15.Show()
+		$checkmark15.Hide()
+		$Global:didPass15 = $true
+		log "AC Power supply not detected. Power Status: $ACPowerStatus"
+		log "QA Status: $didPass15"
+	}
+	elseif ($ACPowerStatus -ne 'True')
+	{
+		$ACPower.ForeColor = 'Red'
+		$ACPower.Text = "AC power supply not detected!"
+		$cross15.Show()
+		$checkmark15.Hide()
+		$Global:didPass15 = $false
+		log "====AC Power supply not detected. Power Status: $ACPowerStatus===="
+		log "====QA Status: $didPass15===="
+	}
+	Start-Sleep -Seconds 3
+}
+# main displayed form
+$formWSUQAHardware_Load={
+	#TODO: Place custom script here
+	if ((Test-Path -Path "C:\HardwareVerification.log") -ne $true)
+	{
+		New-Item -Path "C:\HardwareVerification.log" -ItemType file -Force
+	}
+	
+	# hide unnecessary labels/buttons
+	$information.Hide()
+	$taskInfo.Hide()
+	$passed.Hide()
+	$failed.Hide()
+	$greenCheckmark1.Hide()
+	$greenCheckmark2.Hide()
+	$greenCheckmark3.Hide()
+	$greenCheckmark4.Hide()
+	$greenCheckmark5.Hide()
+	$greenCheckmark6.Hide()
+	$greenCheckmark7.Hide()
+	$greenCheckmark8.Hide()
+	$greenCheckmark9.Hide()
+	$greenCheckmark10.Hide()
+	$greenCheckmark11.Hide()
+	$greenCheckmark12.Hide()
+	$greenCheckmark13.Hide()
+	$greenCheckmark14.Hide()
+	$greenCheckmark15.Hide()
+	$cross1.Hide()
+	$cross2.Hide()
+	$cross3.Hide()
+	$cross4.Hide()
+	$cross5.Hide()
+	$cross6.Hide()
+	$cross7.Hide()
+	$cross8.Hide()
+	$cross9.Hide()
+	$cross10.Hide()
+	$cross11.Hide()
+	$cross12.Hide()
+	$cross13.Hide()
+	$cross14.Hide()
+	$cross15.Hide()
+	$checkmark1.Show()
+	$checkmark2.Show()
+	$checkmark3.Show()
+	$checkmark4.Show()
+	$checkmark5.Show()
+	$checkmark6.Show()
+	$checkmark7.Show()
+	$checkmark8.Show()
+	$checkmark9.Show()
+	$checkmark10.Show()
+	$checkmark11.Show()
+	$checkmark12.Show()
+	$checkmark13.Show()
+	$checkmark14.Show()
+	$checkmark15.Show()
+	$buttonFinish.Hide()
+}
+
+# begin hardware test button
+$buttonAutoCheck_Click={
+	#TODO: Place custom script here
+	$gear.Hide()
+	$manualCheck.Hide()
+	$progressbaroverlay1.Maximum = 100
+	$progressbaroverlay1.Step = 7.25
+	
+	if (($Model -eq 'HP Elitebook x360 1030 G3') -or ($Model -eq 'HP Elitebook x360 1030 G2'))
+	{
+		$buttonAutoCheck.Visible = $false # Hides the begin button after it is clicked
+		$progressbaroverlay1.Visible = $true # Makes the gui bar visible 
+		$progressbaroverlay1.TextOverlay = 'Gathering system information' # Changes the text in the progress bar
+		$progressbaroverlay1.PerformStep() 
+		systemInfo #step1
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s keyboard."
+		$progressbaroverlay1.PerformStep()
+		keyboardStatus #step2
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s touchpad."
+		$progressbaroverlay1.PerformStep()
+		touchpad #step3
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s onboard camera."
+		$progressbaroverlay1.PerformStep()
+		
+		#step4
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3camera
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2camera
+		}
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s bluetooth."
+		$progressbaroverlay1.PerformStep()
+		bluetooth #step5
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s wifi."
+		$progressbaroverlay1.PerformStep()
+		wifi #step6
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s battery."
+		$progressbaroverlay1.PerformStep()
+		battery #step7
+		
+		#step8
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s fingerprint reader."
+		$progressbaroverlay1.PerformStep()
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3fingerPrintReader
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2fingerPrintReader
+		}
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s bios version."
+		$progressbaroverlay1.PerformStep()
+		biosCheck #step9
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s touch screen."
+		$progressbaroverlay1.PerformStep()
+		touchScreen #step10
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s TPM."
+		$progressbaroverlay1.PerformStep()
+		tpm #step11
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s speaker."
+		$progressbaroverlay1.PerformStep()
+		speakers #step12
+		
+		#step13
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s microphone."
+		$progressbaroverlay1.PerformStep()
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3microPhone
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2microPhone
+		}
+		
+		#step14
+		if ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s SD card reader."
+			$progressbaroverlay1.PerformStep()
+			sdCard
+		}
+		else
+		{
+			$progressbaroverlay1.TextOverlay = 'Skipping ' + $Model + "'s SD card reader test."
+			$information.Text = 'No SD card slot available in x360 g3.'
+			Start-Sleep -Seconds 2
+			$progressbaroverlay1.PerformStep()
+			$checkmark14.Hide()
+			$sdCard.ForeColor = 'Yellow'
+			$sdCard.Text = "S̶D̶ ̶c̶a̶r̶d̶ ̶r̶e̶a̶d̶e̶r̶ ̶t̶e̶s̶t̶ ̶s̶k̶i̶p̶p̶e̶d̶!̶"
+		}
+		
+		$progressbaroverlay1.TextOverlay = 'Checking ' + $Model + "'s "
+		$progressbaroverlay1.PerformStep()
+		ACPower #step15
+		
+		$information.Text = 'Hardware verification completed!'
+		$progressbaroverlay1.TextOverlay = 'Hardware verification completed.'
+		$progressbaroverlay1.PerformStep()
+		Start-Sleep -Seconds 2
+		$progressbaroverlay1.Hide()
+		
+		# final QA check
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3QAPassedOrFailed
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2QAPassedOrFailed
+		}
+		Start-Sleep -Seconds 2
+		$buttonFinish.Show()
+	}
+	else
+	{
+		$gear.Hide()
+		$information.Show()
+		$information.ForeColor = 'Red'
+		$information.Text =
+		"Correct system not detected!" + "`n" + "`n" +
+		"This version of QA Hardware tool only checks HP x360 1030 G2 and HP x360 1030 G3"
+		Start-Sleep -Seconds 4
+		$system.ForeColor = 'Red'
+		$checkmark1.Hide()
+		$cross1.Show()
+		$system.Text = "Correct system not detected!"
+		$information.Text = "Exiting program...."
+		Start-Sleep -Seconds 3
+		$formWSUQAHardware.Close()
+	}
+}
+
+$Global:ManualStep = 0
+
+$manualCheck_Click = {
+	#TODO: Place custom script here
+	$buttonAutoCheck.Hide()
+	$manualCheck.Text = 'Next'
+	$gear.Hide()
+	$Global:ManualStep = $Global:ManualStep + 1
+	manualHardwareVerification
+	$taskInfo.Show()
+}
+
+# manual hardware check - allows tech to perform each step one by one by clicking 'Next' button.
+function manualHardwareVerification
+{
+	$taskInfo.ForeColor = 'Lime'
+	if ($ManualStep -eq 1)
+	{
+		systemInfo
+		$taskInfo.Text = 'task (1 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 2)
+	{
+		keyboardStatus
+		$taskInfo.Text = 'task (2 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 3)
+	{
+		touchpad
+		$taskInfo.Text = 'task (3 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 4)
+	{
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3camera
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2camera
+		}
+		$taskInfo.Text = 'task (4 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 5)
+	{
+		bluetooth
+		$taskInfo.Text = 'task (5 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 6)
+	{
+		wifi
+		$taskInfo.Text = 'task (6 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 7)
+	{
+		battery
+		$taskInfo.Text = 'task (7 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 8)
+	{
+		
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3fingerPrintReader
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2fingerPrintReader
+		}
+		$taskInfo.Text = 'task (8 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 9)
+	{
+		biosCheck
+		$taskInfo.Text = 'task (9 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 10)
+	{
+		touchScreen
+		$taskInfo.Text = 'task (10 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 11)
+	{	
+		tpm
+		$taskInfo.Text = 'task (11 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 12)
+	{
+		speakers
+		$taskInfo.Text = 'task (12 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 13)
+	{
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3microPhone
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2microPhone
+		}
+		$taskInfo.Text = 'task (13 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 14)
+	{
+		if ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			sdCard
+		}
+		else
+		{
+			$information.Text = 'No SD card slot available in x360 g3.'
+			Start-Sleep -Seconds 2
+			$checkmark14.Hide()
+			$sdCard.ForeColor = 'Yellow'
+			$sdCard.Text = "S̶D̶ ̶c̶a̶r̶d̶ ̶r̶e̶a̶d̶e̶r̶ ̶t̶e̶s̶t̶ ̶s̶k̶i̶p̶p̶e̶d̶!̶"
+		}
+		$taskInfo.Text = 'task (14 of 15) completed!'
+	}
+	elseif ($ManualStep -eq 15)
+	{
+		ACPower
+		$taskInfo.Text = 'task (15 of 15) completed!'
+		$taskInfo.Text = 'Task complete!'
+		Start-Sleep -Seconds 1
+		$manualCheck.Hide()
+		
+		# final QA check 
+		if ($Model -eq "HP Elitebook x360 1030 G3")
+		{
+			g3QAPassedOrFailed
+		}
+		elseif ($Model -eq "HP Elitebook x360 1030 G2")
+		{
+			g2QAPassedOrFailed
+		}
+		$buttonFinish.Show()
+	}
+}
+
+# function to check if hp x360 g3 QA Hardware passed or failed!
+function g3QAPassedOrFailed
+{
+	<#$statusArray = $keyboardStatus, $g3tpStatus, $IRcameraStatus, $g3cameraStatus, $bluetoothStatus, $wifiStatus, $batteryStatus, $touchScreenStatus, $tpmActivated, $tpmEnabled, $speakerStatus, $g3microPhoneStatus, $ACPowerStatus # an array of hardware status 
+	
+	for ($i = 0; $i -lt 13; $i++)
+	{
+		if (($statusArray[$i] -eq 'OK' -or $statusArray[$i] -eq 'True' -or $statusArray[$i] -ne 'Error') -and ($BIOSVersion -eq 010801 -or $BIOSVersion -gt 010801)) # update the BIOS version with the new release
+		{
+			$information.ForeColor = 'Lime'
+			$information.Text = 'QA Check Passed :)'
+			$failed.Hide()
+			$passed.Show()
+		}
+		else
+		{
+			$information.ForeColor = 'Red'
+			$information.Text = 'QA Check Failed :(. Please check the hardware and run the test again.'
+			$passed.Hide()
+			$failed.Show()
+		}
+	}#>
+	# skip sd card check step for x360g3. Total steps = 14 
+	$totalPassedSteps = $didPass1 + $didPass2 + $didPass3 + $didPass4 + $didPass5 + $didPass6 + $didPass7 + $didPass9 + $didPass10 + $didPass11 + $didPass12 + $didPass13 + $didPass15
+	
+	log "*********************************************************************"
+	log "Total completed steps: $totalPassedSteps out of 14"
+	log "**************Script Ended**************"
+	log "*********************************************************************"
+	
+	if ($totalPassedSteps -eq 13)
+	{
+		$information.ForeColor = 'Lime'
+		$information.Text = 'QA Check Passed :)'
+		$failed.Hide()
+		$passed.Show()
+	}
+	else
+	{
+		$information.ForeColor = 'Red'
+		$information.Text = 'QA Check Failed :(. Please check the hardware and run the test again.'
+		$passed.Hide()
+		$failed.Show()
+	}
+}
+
+# function to check if hp x360 g2 QA Hardware passed or failed!
+function g2QAPassedOrFailed
+{
+	$totalPassedSteps = $didPass1 + $didPass2 + $didPass3 + $didPass4 + $didPass5 + $didPass6 + $didPass7 + $didPass9 + $didPass10 + $didPass11 + $didPass12 + $didPass13 + $didPass14 + $didPass15
+	
+	# x360 g2 total included steps = 15 
+	log "*********************************************************************"
+	log "Total completed steps: $totalPassedSteps out of 15"
+	log "**************Script Ended**************"
+	log "*********************************************************************"
+	
+	if ($totalPassedSteps -eq 14)
+	{
+		$information.ForeColor = 'Lime'
+		$information.Text = 'QA Check Passed :)'
+		$failed.Hide()
+		$passed.Show()
+	}
+	else
+	{
+		$information.ForeColor = 'Red'
+		$information.Text = 'QA Check Failed :(. Please check the hardware and run the test again.'
+		$passed.Hide()
+		$failed.Show()
+	}
+}
+
+# function to log hardware status 
+function log($logInfo)
+{
+	Add-Content C:\HardwareVerification.log "$logInfo"
+}
+
+$keyboard_Click = {
+	#TODO: Place custom script here
+	
+}
+$system_Click = {
+	#TODO: Place custom script here
+	
+}
+$information_Click = {
+	#TODO: Place custom script here
+	
+}
+$progressbaroverlay1_Click={
+	#TODO: Place custom script here
+	
+}
+$labelQAVersion1_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark9_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark4_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark11_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark10_Click={
+	#TODO: Place custom script here
+	
+}
+$touchScreen_Click={
+	#TODO: Place custom script here
+	
+}
+$buttonFinish_Click={
+	#TODO: Place custom script here
+	$formWSUQAHardware.Close()
+}
+$checkmark3_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark2_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark1_Click={
+	#TODO: Place custom script here
+	
+}
+$touchpad_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark8_Click={
+	#TODO: Place custom script here
+	
+}
+$checkmark7_Click={
+	#TODO: Place custom script here
+	
+}
+$picturebox1_Click={
+	#TODO: Place custom script here
+	
+}
