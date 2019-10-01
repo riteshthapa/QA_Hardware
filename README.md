@@ -1,11 +1,8 @@
 # QA_Hardware
 
-***********************************************
-
-WINONA STATE UNIVERSITY - SOFTWARE DEVELOPMENT 
-SUPERVISED BY: TRAVIS NORMAN 
-
-***********************************************
+***WINONA STATE UNIVERSITY - SOFTWARE DEVELOPMENT***
+***DEVELOPED BY: RITESH THAPA***
+***SUPERVISED BY: TRAVIS NORMAN*** 
 
 This program was created in order to ensure the quality of incoming/existing hardware that was being distributed for Winona State University's laptop program. It is mainly intended for the hardware staff to run this tool and check if any basic function of the laptop's are missing or not working. This tool is specifically focused to check hp x360 1030 G2 and hp x360 1030 G3's hardware. (At this time these were the laptop's being distributed in a laptop program)
 
